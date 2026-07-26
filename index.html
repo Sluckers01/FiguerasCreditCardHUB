@@ -73,8 +73,11 @@
       </section>
 
       <section class="panel">
-        <div class="panel-head split"><div><h2>Transaction History</h2><p>Edit or delete an entry without retyping it.</p></div>
-          <input id="txSearch" class="search" type="search" placeholder="Search">
+        <div class="panel-head split"><div><h2>Transaction History</h2><p>Choose a card or tap a card on the Dashboard to see only that card's transactions.</p></div>
+          <div class="history-tools">
+            <select id="txCardFilter" class="search"><option value="">All Cards</option></select>
+            <input id="txSearch" class="search" type="search" placeholder="Search">
+          </div>
         </div>
         <div id="transactionList" class="mobile-list"></div>
       </section>
