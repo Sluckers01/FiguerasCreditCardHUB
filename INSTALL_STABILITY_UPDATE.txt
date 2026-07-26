@@ -1,0 +1,20 @@
+CONNECTION STABILITY UPDATE
+
+Replace these 3 files in FiguerasCreditCardHUB:
+- app.js
+- styles.css
+- sw.js
+
+No Apps Script changes.
+No new API key.
+No new /exec URL.
+
+Changes:
+- Refresh waits up to 30 seconds and retries up to 3 times.
+- Add/Edit/Delete waits up to 45 seconds.
+- Writes are never automatically retried, preventing duplicate transactions.
+- After a confirmed save, the form clears immediately.
+- Refresh runs after the form clears.
+- A timed-out write is marked as uncertain; press Refresh/check before trying again.
+- Header shows Saving…, Saved ✓, Syncing…, offline, or warning status.
+- Service-worker cache version bumped for iPhone.

@@ -32,3 +32,11 @@ main{max-width:1180px;margin:auto;padding:16px}.page{display:none}.page.active{d
 .tx-badge.charge{background:#fee2e2;color:#991b1b}
 .tx-badge.credit{background:#dcfce7;color:#166534}
 .tx-badge.neutral{background:#e2e8f0;color:#475569}
+
+body[data-sync-state="syncing"] #syncText,
+body[data-sync-state="saving"] #syncText{color:#b45309;font-weight:700}
+body[data-sync-state="saved"] #syncText,
+body[data-sync-state="ok"] #syncText{color:#15803d;font-weight:700}
+body[data-sync-state="offline"] #syncText,
+body[data-sync-state="warning"] #syncText{color:#b45309;font-weight:700}
+body[data-sync-state="error"] #syncText{color:#b91c1c;font-weight:700}

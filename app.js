@@ -42,22 +42,54 @@ function clearSettings(){
   state.data=null;localStorage.removeItem('cc_cache');renderEmpty();openSettings(true);
 }
 
-function refreshData(){
-  if(!configReady()){openSettings(true);return Promise.reject(new Error('Connection settings are missing.'))}
-  setBusy(true); $('syncText').textContent='Syncing…';
-  return jsonp('data').then(result=>{
-    state.data=result.data;
-    localStorage.setItem('cc_cache',JSON.stringify(state.data));
-    renderAll(); $('syncText').textContent='synced '+state.data.syncedAt;
-    return state.data;
-  }).catch(err=>{toast(err.message);$('syncText').textContent='offline / last saved view';throw err;}).finally(()=>setBusy(false));
+
+async function loadDataWithRetry(){
+  let lastError;
+  for(let attempt=1;attempt<=3;attempt++){
+    try{
+      return await jsonp('data',null,30000);
+    }catch(err){
+      lastError=err;
+      if(attempt<3){
+        setSyncStatus(`Retrying connection (${attempt+1}/3)…`,'syncing');
+        await wait(900*attempt);
+      }
+    }
+  }
+  throw lastError||new Error('Unable to connect.');
 }
 
-function jsonp(action,payload=null){
+function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+function setSyncStatus(text,kind=''){ $('syncText').textContent=text; document.body.dataset.syncState=kind; }
+
+function refreshData(){
+  if(!configReady()){
+    openSettings(true);
+    return Promise.reject(new Error('Connection settings are missing.'));
+  }
+  setBusy(true);
+  setSyncStatus('Syncing…','syncing');
+  return loadDataWithRetry()
+    .then(result=>{
+      state.data=result.data;
+      localStorage.setItem('cc_cache',JSON.stringify(state.data));
+      renderAll();
+      setSyncStatus('synced '+state.data.syncedAt,'ok');
+      return state.data;
+    })
+    .catch(err=>{
+      setSyncStatus('offline / last saved view','offline');
+      toast(err.message||'Unable to refresh.');
+      throw err;
+    })
+    .finally(()=>setBusy(false));
+}
+
+function jsonp(action,payload=null,timeoutMs=30000){
   return new Promise((resolve,reject)=>{
     const cb='__cccb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
     const script=document.createElement('script');
-    const timer=setTimeout(()=>done(new Error('Connection timed out.')),15000);
+    const timer=setTimeout(()=>done(new Error('Connection timed out.')),timeoutMs);
 
     function cleanup(){
       clearTimeout(timer);
@@ -188,19 +220,63 @@ function renderPayments(){
   table.querySelector('tbody').innerHTML=(state.data.monthlyPayments||[]).map(r=>'<tr><td>'+esc(r.card)+'</td>'+r.months.map(v=>`<td>${money(v)}</td>`).join('')+'</tr>').join('');
 }
 
+async function runWriteAction(action,payload){
+  setSyncStatus('Saving…','saving');
+  const result=await jsonp(action,payload,45000);
+  setSyncStatus('Saved ✓','saved');
+  return result;
+}
+
 async function submitTransaction(e){
-  e.preventDefault(); if(state.busy)return;
+  e.preventDefault();
+  if(state.busy)return;
+
   const wasEditing=!!state.editingId;
-  const tx={id:state.editingId||'',date:$('txDate').value,card:$('txCard').value,type:$('txType').value,category:$('txCategory').value,description:$('txDescription').value.trim(),amount:Number($('txAmount').value),referenceConfirmation:$('txReference').value.trim(),notes:$('txNotes').value.trim()};
-  if(!tx.card||!tx.type||!tx.category||!(tx.amount>0))return toast('Complete Card, Type, Category and Amount.');
-  state.busy=true;$('saveBtn').disabled=true;$('refreshBtn').disabled=true;$('saveBtn').textContent=wasEditing?'Saving Changes…':'Saving…';
+  const tx={
+    id:state.editingId||'',
+    date:$('txDate').value,
+    card:$('txCard').value,
+    type:$('txType').value,
+    category:$('txCategory').value,
+    description:$('txDescription').value.trim(),
+    amount:Number($('txAmount').value),
+    referenceConfirmation:$('txReference').value.trim(),
+    notes:$('txNotes').value.trim()
+  };
+
+  if(!tx.card||!tx.type||!tx.category||!(tx.amount>0)){
+    return toast('Complete Card, Type, Category and Amount.');
+  }
+
+  state.busy=true;
+  $('saveBtn').disabled=true;
+  $('refreshBtn').disabled=true;
+  $('saveBtn').textContent=wasEditing?'Saving Changes…':'Saving…';
+
   try{
-    await postAction(wasEditing?'update':'add',tx);
-    await refreshData();
+    await runWriteAction(wasEditing?'update':'add',tx);
     clearTransactionForm();
-    toast(wasEditing?'Transaction updated.':'Transaction saved. Form cleared.');
-  }catch(err){toast(err.message||'Unable to save.')}
-  finally{state.busy=false;$('saveBtn').disabled=false;$('refreshBtn').disabled=false;$('saveBtn').textContent='Save Transaction';}
+    toast(wasEditing?'Transaction updated.':'Transaction saved.');
+    try{
+      await refreshData();
+    }catch(refreshErr){
+      toast('Saved to Google Sheets. Refresh is still catching up.');
+    }
+  }catch(err){
+    const msg=String(err&&err.message||'Unable to save.');
+    if(msg.toLowerCase().includes('timed out')){
+      toast('Save status is uncertain. Press Refresh before trying again.');
+      setSyncStatus('Check before retrying','warning');
+    }else{
+      toast(msg);
+      setSyncStatus('Save failed','error');
+    }
+  }finally{
+    state.busy=false;
+    $('saveBtn').disabled=false;
+    $('refreshBtn').disabled=false;
+    $('saveBtn').textContent='Save Transaction';
+  }
 }
 function editTx(id){
   const t=state.data.transactions.find(x=>x.id===id);if(!t)return;
@@ -209,9 +285,35 @@ function editTx(id){
   showPage('transactions',document.querySelector('[data-page="transactions"]'));window.scrollTo({top:0,behavior:'smooth'});
 }
 async function deleteTx(id){
-  const t=state.data.transactions.find(x=>x.id===id);if(!t)return;
-  if(!confirm(`Delete ${t.card} · ${t.description||t.type} · ${money(t.amount)}?\n\nThis removes it from Google Sheets and recalculates all balances.`))return;
-  setBusy(true);try{await postAction('delete',{id});toast('Transaction deleted.');await refreshData()}catch(err){toast('Delete failed: '+(err.message||'Unknown error.'))}finally{setBusy(false)}
+  const t=state.data.transactions.find(x=>x.id===id);
+  if(!t)return;
+  if(!confirm(`Delete ${t.card} · ${t.description||t.type} · ${money(t.amount)}?
+
+This removes it from Google Sheets and recalculates all balances.`))return;
+
+  state.busy=true;
+  $('refreshBtn').disabled=true;
+  try{
+    await runWriteAction('delete',{id});
+    toast('Transaction deleted.');
+    try{
+      await refreshData();
+    }catch(refreshErr){
+      toast('Deleted from Google Sheets. Refresh is still catching up.');
+    }
+  }catch(err){
+    const msg=String(err&&err.message||'Unable to delete.');
+    if(msg.toLowerCase().includes('timed out')){
+      toast('Delete status is uncertain. Press Refresh before trying again.');
+      setSyncStatus('Check before retrying','warning');
+    }else{
+      toast('Delete failed: '+msg);
+      setSyncStatus('Delete failed','error');
+    }
+  }finally{
+    state.busy=false;
+    $('refreshBtn').disabled=false;
+  }
 }
 function clearTransactionForm(){
   state.editingId=null;$('formTitle').textContent='Add Transaction';$('saveBtn').textContent='Save Transaction';$('cancelEditBtn').classList.add('hidden');
