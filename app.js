@@ -139,6 +139,23 @@ function cardHTML(c,clickable=false){
   <div class="util-track"><div class="util-fill ${cls}" style="width:${Math.min(100,Math.max(0,c.utilization*100))}%"></div></div></article>`;
 }
 
+
+function txVisual(type){
+  const t=String(type||'').toLowerCase();
+  if(['purchase','interest','fee'].includes(t)){
+    return {cls:'charge',label:'Charge',sign:'+'};
+  }
+  if(['payment','credit/refund'].includes(t)){
+    return {cls:'credit',label:t==='payment'?'Payment':'Credit / Refund',sign:'−'};
+  }
+  return {cls:'neutral',label:type||'Other',sign:''};
+}
+
+function signedMoney(type,amount){
+  const v=txVisual(type);
+  return `${v.sign}${money(Math.abs(Number(amount||0)))}`;
+}
+
 function renderTransactions(){
   if(!state.data)return;
   const q=$('txSearch').value.trim().toLowerCase();
@@ -146,14 +163,26 @@ function renderTransactions(){
     if(state.cardFilter && t.card!==state.cardFilter) return false;
     return !q||[t.date,t.card,t.description,t.category,t.type,t.notes].join(' ').toLowerCase().includes(q);
   });
-  $('transactionList').innerHTML=rows.length?rows.map(t=>`<article class="tx-row">
-    <div class="tx-date">${datePretty(t.date)}</div><div class="tx-main"><b>${esc(t.card)} · ${esc(t.description||t.type)}</b><small>${esc(t.category)} · ${esc(t.type)}${t.notes?' · '+esc(t.notes):''}</small></div>
-    <div class="tx-amount">${money(t.amount)}</div><div class="tx-actions"><button class="small-btn" onclick="editTx('${attr(t.id)}')">Edit</button><button class="small-btn delete" onclick="deleteTx('${attr(t.id)}')">Delete</button></div></article>`).join(''):'<p class="help">No transactions found.</p>';
+  $('transactionList').innerHTML=rows.length?rows.map(t=>{
+    const v=txVisual(t.type);
+    return `<article class="tx-row ${v.cls}">
+      <div class="tx-date">${datePretty(t.date)}</div>
+      <div class="tx-main">
+        <b>${esc(t.card)} · ${esc(t.description||t.type)}</b>
+        <small><span class="tx-badge ${v.cls}">${esc(v.label)}</span> ${esc(t.category)}${t.notes?' · '+esc(t.notes):''}</small>
+      </div>
+      <div class="tx-amount ${v.cls}">${signedMoney(t.type,t.amount)}</div>
+      <div class="tx-actions">
+        <button class="small-btn" onclick="editTx('${attr(t.id)}')">Edit</button>
+        <button class="small-btn delete" onclick="deleteTx('${attr(t.id)}')">Delete</button>
+      </div>
+    </article>`;
+  }).join(''):'<p class="help">No transactions found.</p>';
 }
 function renderPayments(){
   const pays=state.data.payments||[];$('payTotal').textContent=money(state.data.summary.paymentsThisMonth);
   $('payYear').textContent=(state.data.monthlyPayments[0]||{}).year||new Date().getFullYear();
-  $('paymentList').innerHTML=pays.length?pays.map(t=>`<article class="tx-row"><div class="tx-date">${datePretty(t.date)}</div><div class="tx-main"><b>${esc(t.card)} · ${esc(t.description||'Payment')}</b><small>${esc(t.referenceConfirmation||'No confirmation number')}</small></div><div class="tx-amount">${money(t.amount)}</div></article>`).join(''):'<p class="help">No payments recorded.</p>';
+  $('paymentList').innerHTML=pays.length?pays.map(t=>`<article class="tx-row credit"><div class="tx-date">${datePretty(t.date)}</div><div class="tx-main"><b>${esc(t.card)} · ${esc(t.description||'Payment')}</b><small><span class="tx-badge credit">Payment</span> ${esc(t.referenceConfirmation||'No confirmation number')}</small></div><div class="tx-amount credit">−${money(Math.abs(Number(t.amount||0)))}</div></article>`).join(''):'<p class="help">No payments recorded.</p>';
   const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const table=$('monthlyTable');table.querySelector('thead').innerHTML='<tr><th>Card</th>'+months.map(m=>`<th>${m}</th>`).join('')+'</tr>';
   table.querySelector('tbody').innerHTML=(state.data.monthlyPayments||[]).map(r=>'<tr><td>'+esc(r.card)+'</td>'+r.months.map(v=>`<td>${money(v)}</td>`).join('')+'</tr>').join('');

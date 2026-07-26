@@ -20,3 +20,15 @@ main{max-width:1180px;margin:auto;padding:16px}.page{display:none}.page.active{d
 .ccard.clickable:active{transform:scale(.992)}
 .ccard.clickable:hover{border-color:#b9c6d6;box-shadow:0 10px 34px rgba(16,42,74,.12)}
 @media(max-width:760px){.history-tools{width:100%;display:grid;grid-template-columns:1fr}.history-tools .search{max-width:none;width:100%}}
+
+/* Transaction direction colors: red increases card debt; green reduces card debt. */
+.tx-row.charge{border-left:4px solid #ef4444;background:linear-gradient(90deg,#fff7f7 0,#fff 32%)}
+.tx-row.credit{border-left:4px solid #22c55e;background:linear-gradient(90deg,#f5fff7 0,#fff 32%)}
+.tx-row.neutral{border-left:4px solid #94a3b8}
+.tx-amount.charge{color:#c62828}
+.tx-amount.credit{color:#15803d}
+.tx-amount.neutral{color:#475569}
+.tx-badge{display:inline-block;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800;margin-right:5px;vertical-align:1px}
+.tx-badge.charge{background:#fee2e2;color:#991b1b}
+.tx-badge.credit{background:#dcfce7;color:#166534}
+.tx-badge.neutral{background:#e2e8f0;color:#475569}
