@@ -52,36 +52,46 @@ function refreshData(){
   }).catch(err=>{toast(err.message);$('syncText').textContent='offline / last saved view';}).finally(()=>setBusy(false));
 }
 
-function jsonp(action){
+function jsonp(action,payload=null){
   return new Promise((resolve,reject)=>{
     const cb='__cccb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
     const script=document.createElement('script');
     const timer=setTimeout(()=>done(new Error('Connection timed out.')),15000);
-    function cleanup(){clearTimeout(timer);delete window[cb];script.remove()}
-    function done(err,data){cleanup();err?reject(err):resolve(data)}
+
+    function cleanup(){
+      clearTimeout(timer);
+      try{delete window[cb]}catch(_){}
+      script.remove();
+    }
+
+    function done(err,data){
+      cleanup();
+      if(err)return reject(err);
+      if(!data || data.ok!==true){
+        return reject(new Error((data&&data.error)||'Google Sheet action failed.'));
+      }
+      resolve(data);
+    }
+
     window[cb]=data=>done(null,data);
     script.onerror=()=>done(new Error('Could not reach the Google Sheet API.'));
+
     const u=new URL(apiUrl());
-    u.searchParams.set('action',action);u.searchParams.set('key',apiKey());u.searchParams.set('callback',cb);u.searchParams.set('_',Date.now());
-    script.src=u.toString();document.head.appendChild(script);
+    u.searchParams.set('action',action);
+    u.searchParams.set('key',apiKey());
+    u.searchParams.set('callback',cb);
+    if(payload!==null) u.searchParams.set('payload',JSON.stringify(payload));
+    u.searchParams.set('_',Date.now());
+
+    script.src=u.toString();
+    document.head.appendChild(script);
   });
 }
 
 function postAction(action,payload){
-  return new Promise((resolve,reject)=>{
-    const form=document.createElement('form');
-    form.method='POST';form.action=apiUrl();form.target='apiBridge';form.style.display='none';
-    [['action',action],['key',apiKey()],['payload',JSON.stringify(payload)]].forEach(([n,v])=>{
-      const i=document.createElement('input');i.type='hidden';i.name=n;i.value=v;form.appendChild(i);
-    });
-    document.body.appendChild(form);
-    let finished=false;
-    const frame=$('apiBridge');
-    const onload=()=>{if(finished)return;finished=true;frame.removeEventListener('load',onload);form.remove();setTimeout(()=>resolve(),450)};
-    frame.addEventListener('load',onload,{once:true});
-    form.submit();
-    setTimeout(()=>{if(!finished){finished=true;frame.removeEventListener('load',onload);form.remove();resolve()}},2500);
-  });
+  // JSONP is used for write operations too. This avoids cross-origin iframe
+  // redirect issues and lets the app receive the actual Apps Script error.
+  return jsonp(action,payload);
 }
 
 function loadCached(){
@@ -145,7 +155,7 @@ function editTx(id){
 async function deleteTx(id){
   const t=state.data.transactions.find(x=>x.id===id);if(!t)return;
   if(!confirm(`Delete ${t.card} · ${t.description||t.type} · ${money(t.amount)}?\n\nThis removes it from Google Sheets and recalculates all balances.`))return;
-  setBusy(true);try{await postAction('delete',{id});toast('Transaction deleted.');await refreshData()}catch(err){toast(err.message||'Unable to delete.')}finally{setBusy(false)}
+  setBusy(true);try{await postAction('delete',{id});toast('Transaction deleted.');await refreshData()}catch(err){toast('Delete failed: '+(err.message||'Unknown error.'))}finally{setBusy(false)}
 }
 function resetForm(){state.editingId=null;$('formTitle').textContent='Add Transaction';$('saveBtn').textContent='Save Transaction';$('cancelEditBtn').classList.add('hidden');$('txForm').reset();setToday();renderAll()}
 function setToday(){const d=new Date();$('txDate').value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
