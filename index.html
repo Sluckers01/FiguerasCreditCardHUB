@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Card Hub">
+  <title>Figueras Credit Card Hub</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <header class="app-header">
+    <div class="brand">
+      <img src="icons/icon-180.png" alt="" class="brand-icon">
+      <div><h1>Credit Card Command Center</h1><p>Figueras Family • <span id="syncText">Not connected</span></p></div>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="refreshBtn" aria-label="Refresh">↻</button>
+      <button class="settings-btn" id="settingsBtn">Settings</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-page="dashboard">Dashboard</button>
+    <button class="tab" data-page="transactions">Transactions</button>
+    <button class="tab" data-page="payments">Payments</button>
+    <button class="tab" data-page="cards">Cards</button>
+  </nav>
+
+  <main>
+    <section class="page active" id="dashboard">
+      <div class="metric-grid">
+        <article class="metric debt"><span>Total Debt</span><strong id="totalDebt">$0.00</strong></article>
+        <article class="metric"><span>Total Credit Limit</span><strong id="totalLimit">$0.00</strong></article>
+        <article class="metric"><span>Available Credit</span><strong id="availableCredit">$0.00</strong></article>
+        <article class="metric"><span>Overall Utilization</span><strong id="overallUtilization">0.0%</strong></article>
+        <article class="metric"><span>Payments This Month</span><strong id="paymentsThisMonth">$0.00</strong></article>
+        <article class="metric"><span>Cards Needing Attention</span><strong id="attentionCount">0</strong></article>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head"><div><h2>Card Overview</h2><p>Balances and utilization update from the Google Sheet.</p></div></div>
+        <div class="card-list" id="dashboardCards"></div>
+      </section>
+    </section>
+
+    <section class="page" id="transactions">
+      <section class="panel form-panel">
+        <div class="panel-head"><div><h2 id="formTitle">Add Transaction</h2><p>Card, type and category are dropdowns on iPhone and desktop.</p></div></div>
+        <form id="txForm">
+          <input type="hidden" id="txId">
+          <div class="form-grid">
+            <label>Date<input type="date" id="txDate" required></label>
+            <label>Card<select id="txCard" required><option value="">Select card</option></select></label>
+            <label>Type<select id="txType" required><option value="">Select type</option></select></label>
+            <label>Category<select id="txCategory" required><option value="">Select category</option></select></label>
+            <label class="wide">Description<input type="text" id="txDescription" placeholder="Merchant or description"></label>
+            <label>Amount<input type="number" id="txAmount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required></label>
+            <label>Reference / Confirmation<input type="text" id="txReference" placeholder="Optional"></label>
+            <label class="wide">Notes<textarea id="txNotes" placeholder="Optional"></textarea></label>
+          </div>
+          <div class="form-actions">
+            <button class="primary" type="submit" id="saveBtn">Save Transaction</button>
+            <button class="secondary hidden" type="button" id="cancelEditBtn">Cancel Edit</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head split"><div><h2>Transaction History</h2><p>Edit or delete an entry without retyping it.</p></div>
+          <input id="txSearch" class="search" type="search" placeholder="Search">
+        </div>
+        <div id="transactionList" class="mobile-list"></div>
+      </section>
+    </section>
+
+    <section class="page" id="payments">
+      <div class="metric-grid payments-grid">
+        <article class="metric"><span>Payments This Month</span><strong id="payTotal">$0.00</strong></article>
+        <article class="metric"><span>Current Year</span><strong id="payYear">—</strong></article>
+      </div>
+      <section class="panel">
+        <div class="panel-head"><div><h2>Payment History</h2><p>Automatically filtered from transactions marked Payment.</p></div></div>
+        <div id="paymentList" class="mobile-list"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><div><h2>Monthly Payments</h2><p>Current-year payment totals by card.</p></div></div>
+        <div class="table-scroll"><table id="monthlyTable"><thead></thead><tbody></tbody></table></div>
+      </section>
+    </section>
+
+    <section class="page" id="cards">
+      <section class="panel">
+        <div class="panel-head"><div><h2>All Cards</h2><p>Balance, limit, available credit, utilization and due day.</p></div></div>
+        <div class="card-list" id="allCards"></div>
+      </section>
+    </section>
+  </main>
+</div>
+
+<div class="modal hidden" id="settingsModal">
+  <div class="modal-card">
+    <div class="modal-head"><h2>Connection Settings</h2><button class="close-btn" id="closeSettings">×</button></div>
+    <p class="help">Paste the Apps Script Web App <strong>/exec</strong> URL and the API key generated by <code>createApiKey()</code>. These stay on this device.</p>
+    <label>Apps Script Web App URL<input id="apiUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
+    <label>API Key<input id="apiKey" type="password" autocomplete="off" placeholder="Paste API key"></label>
+    <button class="primary full" id="saveSettings">Save & Connect</button>
+    <button class="secondary full" id="clearSettings">Clear Connection</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<iframe name="apiBridge" id="apiBridge" class="bridge" title="API bridge"></iframe>
+<script src="app.js"></script>
+</body>
+</html>
